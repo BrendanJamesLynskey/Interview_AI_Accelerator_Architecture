@@ -110,7 +110,7 @@ Test your knowledge of memory hierarchy, HBM, MAC units, quantization, and spars
 
 3. **B** -- Double buffering uses 2x the SRAM (one buffer for current computation, one for loading the next data) but hides memory latency by overlapping load and compute.
 
-4. **C** -- An INT8 multiplier (8x8 bits) is approximately (8/24)^2 ≈ 1/9 the area of an FP32 multiplier (24x24 mantissa bits), so INT8 MAC is roughly 9-11x cheaper.
+4. **D** -- The significand arrays alone suggest (24/8)^2 = 9x, but a floating-point unit also needs exponent handling, alignment and normalisation. Horowitz's widely cited 45 nm figures (ISSCC 2014) give 282 um^2 for an 8-bit multiplier vs 7,700 um^2 for an FP32 multiplier (27x), and 36-137 um^2 for an 8-32-bit integer adder vs 4,184 um^2 for an FP32 adder. An INT8 MAC is therefore roughly 28-37x smaller than an FP32 MAC, closest to 32x.
 
 5. **B** -- FP32 accumulation prevents "swamping" where large partial sums cause small products to be rounded to zero, which would lose information when accumulating thousands of products.
 

@@ -19,7 +19,7 @@ Compare:
 
 In a flat ring across 32 GPUs, the ring must traverse both NVLink (within nodes) and InfiniBand (between nodes). The bottleneck link determines the effective bandwidth.
 
-With 4 nodes in a ring, each message traverses 3 intra-node NVLink hops and 4 inter-node InfiniBand hops (8->node boundary->8->boundary->...). The ring bandwidth is limited by the slowest link: InfiniBand at 50 GB/s.
+With 4 nodes in a ring, the ring crosses 7 intra-node NVLink hops within each node (28 in all) and 4 inter-node InfiniBand hops (8->node boundary->8->boundary->...). The ring bandwidth is limited by the slowest link: InfiniBand at 50 GB/s.
 
 ```
 Ring all-reduce time = 2 * (31/32) * 4 GB / 50 GB/s = 155 ms
@@ -27,7 +27,7 @@ Ring all-reduce time = 2 * (31/32) * 4 GB / 50 GB/s = 155 ms
 
 Actually, in a ring all-reduce, each GPU sends (N-1)/N of the data in each of 2 phases (reduce-scatter + all-gather). The total data sent per GPU per phase is (N-1)/N * data_size. The time is determined by the bandwidth of the link each GPU sends on.
 
-In the flat ring, some links are NVLink (900 GB/s) and some are InfiniBand (50 GB/s). Each GPU sends data on one link. If the ring alternates between intra-node and inter-node links, each GPU either sends on NVLink or InfiniBand. The 4 GPUs at node boundaries send on InfiniBand (50 GB/s), and the 28 interior GPUs send on NVLink (900 GB/s).
+In the flat ring, some links are NVLink (900 GB/s) and some are InfiniBand (50 GB/s). Each GPU sends data on one link. If the ring alternates between intra-node and inter-node links, each GPU either sends on NVLink or InfiniBand. The 4 GPUs at node boundaries send on InfiniBand (50 GB/s), and the 28 interior GPUs send on NVLink (450 GB/s per direction).
 
 The ring's throughput is limited by the slowest link. Time for reduce-scatter phase:
 ```
@@ -42,7 +42,7 @@ Total (both phases): 2 * 77.5 = 155 ms
 **Phase 1: Intra-node reduce-scatter** (8 GPUs per node, NVLink)
 ```
 Data per GPU = (7/8) * 4 GB = 3.5 GB
-Time = 3.5 / 900 = 3.89 ms
+Time = 3.5 / 450 = 7.78 ms (NVLink 900 GB/s bidirectional = 450 GB/s in the sending direction)
 ```
 After this, each GPU holds 1/8 of the partially reduced result (0.5 GB per GPU).
 
@@ -57,23 +57,23 @@ Time = 2 * 0.375 / 50 = 15 ms
 **Phase 3: Intra-node all-gather** (broadcast the result within each node)
 ```
 Data per GPU = (7/8) * 4 GB = 3.5 GB
-Time = 3.5 / 900 = 3.89 ms
+Time = 3.5 / 450 = 7.78 ms (NVLink 900 GB/s bidirectional = 450 GB/s in the sending direction)
 ```
 
-**Total hierarchical time**: 3.89 + 15.0 + 3.89 = 22.78 ms
+**Total hierarchical time**: 7.78 + 15.0 + 7.78 = 30.56 ms
 
 ### Step 3: Comparison
 
 | Method | Time | Speedup |
 |---|---|---|
 | Flat ring | 155 ms | 1.0x |
-| Hierarchical | 22.78 ms | 6.8x |
+| Hierarchical | 30.56 ms | 5.1x |
 
 ### Step 4: Analysis
 
-The hierarchical approach is 6.8x faster because:
+The hierarchical approach is 5.1x faster because:
 
-1. **Intra-node phases use NVLink**: The 900 GB/s NVLink bandwidth is 18x faster than InfiniBand. The intra-node phases (reduce-scatter and all-gather) complete in under 4 ms each.
+1. **Intra-node phases use NVLink**: NVLink's 450 GB/s per direction is 9x faster than InfiniBand. The intra-node phases (reduce-scatter and all-gather) complete in under 8 ms each.
 
 2. **Inter-node phase has reduced data**: After the intra-node reduce-scatter, each GPU holds only 1/8 of the data. The inter-node communication volume is 8x less than the flat ring.
 

@@ -114,19 +114,19 @@ Since B is 8x4, we cannot fit all 32 weight elements into 16 PEs (each PE would 
 
 **Cycles per phase:**
 - Weight load: 4 cycles (loading 4 weights per column, sequentially)
-- Compute: 4 (rows of A) + 4 (propagation through column) - 1 = 7 cycles
-- Phase total: 4 + 7 = 11 cycles
+- Compute: 4 (rows of A) + 4 (eastward skew across the 4 columns) + 4 (southward propagation through each column) - 2 = 10 cycles (the same $M + N + K - 2$ skew formula that gives 14 cycles for the output-stationary case)
+- Phase total: 4 + 10 = 14 cycles
 
-**Total cycles:** 2 phases * 11 cycles = 22 cycles
+**Total cycles:** 2 phases * 14 cycles = 28 cycles
 
-**Utilization:** 128 MACs / (16 PEs * 22 cycles) = 128 / 352 = 36.4%
+**Utilization:** 128 MACs / (16 PEs * 28 cycles) = 128 / 448 = 28.6%
 
 ### Step 7: Comparison
 
 | Metric | Output-Stationary | Weight-Stationary |
 |---|---|---|
-| Total cycles | 14 | 22 |
-| Utilization | 57.1% | 36.4% |
+| Total cycles | 14 | 28 |
+| Utilization | 57.1% | 28.6% |
 | Data movement (A) | 4 rows * 8 elements = 32 | 4 rows * 8 elements = 32 |
 | Data movement (B) | 4 cols * 8 elements = 32 | 2 loads * 16 weights = 32 |
 | Partial sum movement | None (stays in PE) | Through column (internal) |

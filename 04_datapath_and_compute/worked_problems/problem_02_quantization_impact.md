@@ -20,29 +20,29 @@ For each, calculate: weight storage size, memory bandwidth per inference, effect
 
 **FP16 baseline:**
 ```
-Size = 4096 * 4096 * 2 bytes = 32 MB
+Size = 4096 * 4096 * 2 bytes = 32 MiB (33.6 MB)
 ```
 
 **INT8 per-tensor:**
 ```
-Weights = 4096 * 4096 * 1 byte = 16 MB
+Weights = 4096 * 4096 * 1 byte = 16 MiB
 Scale = 1 * 4 bytes (FP32 scale) = 4 bytes (negligible)
-Total = 16 MB
+Total = 16 MiB (16.8 MB)
 ```
 
 **INT4 group-128:**
 ```
-Weights = 4096 * 4096 * 0.5 bytes = 8 MB
-Scales = (4096 * 4096 / 128) * 2 bytes (FP16 scale per group) = 131,072 * 2 = 256 KB
-Total = 8.25 MB
+Weights = 4096 * 4096 * 0.5 bytes = 8 MiB
+Scales = (4096 * 4096 / 128) * 2 bytes (FP16 scale per group) = 131,072 * 2 = 256 KiB
+Total = 8.25 MiB (8.65 MB)
 ```
 
 **INT4 group-128 + 2:4 sparsity:**
 ```
-Nonzero weights = 4096 * 4096 * 0.5 (50% nonzero) * 0.5 bytes = 4 MB
-Sparsity metadata = 4096 * 4096 / 4 * 0.5 bytes = 2 MB (4 bits per group of 4)
-Scales = 256 KB (same as above)
-Total ≈ 6.25 MB
+Nonzero weights = 4096 * 4096 * 0.5 (50% nonzero) * 0.5 bytes = 4 MiB
+Sparsity metadata = 4096 * 4096 / 4 * 0.5 bytes = 2 MiB (4 bits per group of 4)
+Scales = 256 KiB (same as above)
+Total ≈ 6.25 MiB (6.55 MB)
 ```
 
 ### Step 2: Memory bandwidth per inference
@@ -51,10 +51,10 @@ For batch-1 matrix-vector multiply, the dominant cost is loading the weight matr
 
 | Strategy | Weight load | Bandwidth at 100 tok/s |
 |---|---|---|
-| FP16 | 32 MB | 3.2 GB/s |
-| INT8 | 16 MB | 1.6 GB/s |
-| INT4 g128 | 8.25 MB | 0.825 GB/s |
-| INT4 g128 + 2:4 sparse | 6.25 MB | 0.625 GB/s |
+| FP16 | 33.6 MB | 3.36 GB/s |
+| INT8 | 16.8 MB | 1.68 GB/s |
+| INT4 g128 | 8.65 MB | 0.865 GB/s |
+| INT4 g128 + 2:4 sparse | 6.55 MB | 0.655 GB/s |
 
 ### Step 3: Compute requirements
 
@@ -76,44 +76,44 @@ For each strategy, compute the time for both memory transfer and compute:
 
 **FP16:**
 ```
-Memory time = 32 MB / 2 TB/s = 16 us
+Memory time = 33.6 MB / 2 TB/s = 16.8 us
 Compute time = 33.6M FLOPS / 500 TFLOPS = 0.067 us
-Bottleneck: Memory (238x slower than compute)
-Effective throughput: limited by memory -> 33.6M FLOPS / 16 us = 2.1 TFLOPS
+Bottleneck: Memory (250x slower than compute)
+Effective throughput: limited by memory -> 33.6M FLOPS / 16.8 us = 2.0 TFLOPS
 ```
 
 **INT8:**
 ```
-Memory time = 16 MB / 2 TB/s = 8 us
+Memory time = 16.8 MB / 2 TB/s = 8.4 us
 Compute time = 33.6M ops / 1000 TOPS = 0.034 us (INT8 compute is 2x faster)
-Bottleneck: Memory (235x slower)
-Effective throughput: 33.6M / 8 us = 4.2 TFLOPS equivalent
+Bottleneck: Memory (250x slower)
+Effective throughput: 33.6M / 8.4 us = 4.0 TFLOPS equivalent
 ```
 
 **INT4 group-128:**
 ```
-Memory time = 8.25 MB / 2 TB/s = 4.13 us
+Memory time = 8.65 MB / 2 TB/s = 4.33 us
 Compute time ≈ 0.034 us (dequantize to FP16/INT8 then compute)
 Bottleneck: Memory
-Effective throughput: 33.6M / 4.13 us = 8.1 TFLOPS equivalent
+Effective throughput: 33.6M / 4.33 us = 7.8 TFLOPS equivalent
 ```
 
 **INT4 g128 + 2:4 sparse:**
 ```
-Memory time = 6.25 MB / 2 TB/s = 3.13 us
+Memory time = 6.55 MB / 2 TB/s = 3.28 us
 Compute time ≈ 0.017 us (half the multiplies)
 Bottleneck: Memory
-Effective throughput: 33.6M / 3.13 us = 10.7 TFLOPS equivalent
+Effective throughput: 33.6M / 3.28 us = 10.2 TFLOPS equivalent
 ```
 
 ### Step 5: Summary
 
 | Strategy | Storage | Bandwidth | Per-layer time | Speedup vs FP16 |
 |---|---|---|---|---|
-| FP16 | 32 MB | 32 MB/token | 16.0 us | 1.0x |
-| INT8 | 16 MB | 16 MB/token | 8.0 us | 2.0x |
-| INT4 g128 | 8.25 MB | 8.25 MB/token | 4.13 us | 3.87x |
-| INT4 g128 + 2:4 | 6.25 MB | 6.25 MB/token | 3.13 us | 5.11x |
+| FP16 | 33.6 MB | 33.6 MB/token | 16.8 us | 1.0x |
+| INT8 | 16.8 MB | 16.8 MB/token | 8.4 us | 2.0x |
+| INT4 g128 | 8.65 MB | 8.65 MB/token | 4.33 us | 3.88x |
+| INT4 g128 + 2:4 | 6.55 MB | 6.55 MB/token | 3.28 us | 5.12x |
 
 ### Key Insight
 

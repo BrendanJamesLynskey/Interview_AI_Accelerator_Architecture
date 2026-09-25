@@ -52,26 +52,18 @@ Often fused into a single (D, 3D) weight matrix.
 ```
 FLOPS = 2 * B*S * D * 3*D = 2 * 2048 * 4096 * 12288 = 2.06 * 10^11
 Bytes = (B*S*D + D*3*D + B*S*3*D) * 2 = (2048*4096 + 4096*12288 + 2048*12288) * 2
-      = (8,388,608 + 50,331,648 + 25,165,824) * 2 = 167,772,160 bytes = 160 MB
-AI = 2.06 * 10^11 / 1.68 * 10^8 = 1226 FLOPS/byte
+      = (8,388,608 + 50,331,648 + 25,165,824) * 2 = 167,772,160 bytes = 167.8 MB
+AI = 2.06 * 10^11 / 1.68 * 10^8 = 1229 FLOPS/byte
 ```
 
-**Compute-bound** (1226 >> 250). However, note that at B=1, the weight matrices dominate the data movement. If we consider that weights must be loaded from HBM (they do not fit in 40 MB SRAM for this layer alone), this kernel is effectively weight-loading-bound in practice.
-
-More realistically for B=1, the GEMM is a matrix-vector multiply:
-```
-Effective AI = 2 * 3 * D * (B*S) / (3*D*D * 2) = 2 * 3 * 4096 * 2048 / (3 * 4096 * 4096 * 2)
-             = 50,331,648 / 100,663,296 = ~2 FLOPS/byte (if weights dominate)
-```
-
-Wait -- let us be precise. The input is (2048, 4096) and weights are (4096, 12288). Both must be read:
+**Compute-bound** (1229 >> 250). Note that $B = 1$ does not make this a matrix-vector multiply: with $S = 2048$ tokens in prefill, the $(2048, 4096)$ input is multiplied by the $(4096, 12288)$ weights, so the weight bytes are amortised over 2048 rows and are already counted above:
 ```
 Input bytes: 2048 * 4096 * 2 = 16.8 MB
 Weight bytes: 4096 * 12288 * 2 = 100.7 MB  
 Output bytes: 2048 * 12288 * 2 = 50.3 MB
 Total: 167.8 MB
 FLOPS: 2.06 * 10^11
-AI: 2.06 * 10^11 / 1.678 * 10^8 = 1228 FLOPS/byte
+AI: 2.06 * 10^11 / 1.678 * 10^8 = 1229 FLOPS/byte
 ```
 
 **Status: Compute-bound.** Latency = 2.06 * 10^11 / (500 * 10^12) = 0.412 ms
@@ -83,7 +75,7 @@ Score = Q_h * K_h^T produces (S, S) = (2048, 2048). Done for all H=32 heads.
 ```
 FLOPS = 2 * H * S * S * D_h = 2 * 32 * 2048 * 2048 * 128 = 3.44 * 10^10
 Bytes = (H*S*D_h + H*S*D_h + H*S*S) * 2 = (32*2048*128 + 32*2048*128 + 32*2048*2048) * 2
-      = (8,388,608 + 8,388,608 + 134,217,728) * 2 = 301,989,888 bytes = 288 MB
+      = (8,388,608 + 8,388,608 + 134,217,728) * 2 = 301,989,888 bytes = 302.0 MB
 AI = 3.44 * 10^10 / 3.02 * 10^8 = 114 FLOPS/byte
 ```
 
@@ -94,7 +86,7 @@ Applied row-wise to H attention score matrices, each (S, S).
 
 ```
 FLOPS = H * S * S * 5 = 32 * 2048 * 2048 * 5 = 6.71 * 10^8 (approx 5 ops per element: subtract max, exp, sum, divide, plus the max reduction)
-Bytes = 2 * H * S * S * 2 = 2 * 32 * 2048 * 2048 * 2 = 536,870,912 bytes = 512 MB (read + write)
+Bytes = 2 * H * S * S * 2 = 2 * 32 * 2048 * 2048 * 2 = 536,870,912 bytes = 536.9 MB (read + write)
 AI = 6.71 * 10^8 / 5.37 * 10^8 = 1.25 FLOPS/byte
 ```
 
@@ -117,7 +109,7 @@ Weight matrix (D, D) applied to attention output (B*S, D).
 
 ```
 FLOPS = 2 * B*S * D * D = 2 * 2048 * 4096 * 4096 = 6.87 * 10^10
-Bytes = (2048*4096 + 4096*4096 + 2048*4096) * 2 = (8M + 16M + 8M) * 2 = 64 MB
+Bytes = (2048*4096 + 4096*4096 + 2048*4096) * 2 = (8.4M + 16.8M + 8.4M) * 2 = 67.1 MB
 AI = 6.87 * 10^10 / 6.71 * 10^7 = 1024 FLOPS/byte
 ```
 
@@ -128,7 +120,7 @@ Weight (D, D_ff) = (4096, 16384), input (B*S, D).
 
 ```
 FLOPS = 2 * 2048 * 4096 * 16384 = 2.75 * 10^11
-Bytes = (2048*4096 + 4096*16384 + 2048*16384) * 2 = (8M + 64M + 32M) * 2 = 208 MB
+Bytes = (2048*4096 + 4096*16384 + 2048*16384) * 2 = (8.4M + 67.1M + 33.6M) * 2 = 218.1 MB
 AI = 2.75 * 10^11 / 2.18 * 10^8 = 1261 FLOPS/byte
 ```
 
@@ -139,7 +131,7 @@ Element-wise on (B*S, D_ff) = (2048, 16384) tensor.
 
 ```
 FLOPS = 2048 * 16384 * 8 = 2.68 * 10^8 (GELU requires ~8 ops: polynomial approximation)
-Bytes = 2 * 2048 * 16384 * 2 = 134,217,728 bytes = 128 MB (read + write)
+Bytes = 2 * 2048 * 16384 * 2 = 134,217,728 bytes = 134.2 MB (read + write)
 AI = 2.68 * 10^8 / 1.34 * 10^8 = 2.0 FLOPS/byte
 ```
 
@@ -150,7 +142,7 @@ Weight (D_ff, D) = (16384, 4096), input (B*S, D_ff).
 
 ```
 FLOPS = 2 * 2048 * 16384 * 4096 = 2.75 * 10^11
-Bytes = (2048*16384 + 16384*4096 + 2048*4096) * 2 = (32M + 64M + 8M) * 2 = 208 MB
+Bytes = (2048*16384 + 16384*4096 + 2048*4096) * 2 = (33.6M + 67.1M + 8.4M) * 2 = 218.1 MB
 AI = 1261 FLOPS/byte
 ```
 
@@ -173,25 +165,25 @@ AI = 1.85 * 10^8 / 1.34 * 10^8 = 1.38 FLOPS/byte
 
 | Operation | FLOPS | Bytes | AI (F/B) | Bound | Latency (ms) |
 |---|---|---|---|---|---|
-| QKV Projection | 2.06 * 10^11 | 168 MB | 1228 | Compute | 0.412 |
-| Q * K^T | 3.44 * 10^10 | 288 MB | 114 | Memory | 0.151 |
-| Softmax | 6.71 * 10^8 | 512 MB | 1.25 | Memory | 0.269 |
-| Scores * V | 3.44 * 10^10 | 288 MB | 114 | Memory | 0.151 |
-| Output Proj | 6.87 * 10^10 | 64 MB | 1024 | Compute | 0.137 |
-| FFN Layer 1 | 2.75 * 10^11 | 208 MB | 1261 | Compute | 0.550 |
-| GELU | 2.68 * 10^8 | 128 MB | 2.0 | Memory | 0.067 |
-| FFN Layer 2 | 2.75 * 10^11 | 208 MB | 1261 | Compute | 0.550 |
-| LN + Residual | 1.85 * 10^8 | 128 MB | 1.38 | Memory | 0.067 |
-| **Total** | **8.96 * 10^11** | **1992 MB** | -- | -- | **2.354 ms** |
+| QKV Projection | 2.06 * 10^11 | 167.8 MB | 1229 | Compute | 0.412 |
+| Q * K^T | 3.44 * 10^10 | 302.0 MB | 114 | Memory | 0.151 |
+| Softmax | 6.71 * 10^8 | 536.9 MB | 1.25 | Memory | 0.269 |
+| Scores * V | 3.44 * 10^10 | 302.0 MB | 114 | Memory | 0.151 |
+| Output Proj | 6.87 * 10^10 | 67.1 MB | 1024 | Compute | 0.137 |
+| FFN Layer 1 | 2.75 * 10^11 | 218.1 MB | 1261 | Compute | 0.550 |
+| GELU | 2.68 * 10^8 | 134.2 MB | 2.0 | Memory | 0.067 |
+| FFN Layer 2 | 2.75 * 10^11 | 218.1 MB | 1261 | Compute | 0.550 |
+| LN + Residual | 1.85 * 10^8 | 134.2 MB | 1.38 | Memory | 0.067 |
+| **Total** | **8.94 * 10^11** | **2080 MB** | -- | -- | **2.354 ms** |
 
 ### Step 4: Key observations
 
-1. **Compute-bound kernels** (QKV, Output Proj, FFN layers) account for 82% of the FLOPS but only 70% of the latency (1.649 ms).
+1. **Compute-bound kernels** (QKV, Output Proj, FFN layers) account for 92% of the FLOPS but only 70% of the latency (1.649 ms).
 
-2. **Memory-bound kernels** (attention, softmax, activation, normalization) account for 30% of the latency (0.705 ms) despite contributing less than 5% of total FLOPS.
+2. **Memory-bound kernels** (attention, softmax, activation, normalization) account for 30% of the latency (0.705 ms) despite contributing only about 8% of total FLOPS.
 
 3. **Operator fusion** could dramatically reduce the memory-bound overhead. FlashAttention-style fusion eliminates the separate softmax pass and the intermediate score materialization, potentially saving 0.269 ms (the softmax latency) and reducing the bytes for attention operations.
 
-4. The **total compute utilization** across the full layer is: 8.96 * 10^11 FLOPS / (2.354 * 10^-3 s * 500 * 10^12 FLOPS/s) = 76%. The 24% lost is due to memory-bound operations where compute units sit idle.
+4. The **total compute utilization** across the full layer is: 8.94 * 10^11 FLOPS / (2.354 * 10^-3 s * 500 * 10^12 FLOPS/s) = 76%. The 24% lost is due to memory-bound operations where compute units sit idle.
 
-5. Increasing batch size would improve the arithmetic intensity of the attention operations (Q*K^T and scores*V), potentially making them compute-bound and improving overall utilization.
+5. Increasing batch size would **not** improve the arithmetic intensity of the attention operations (Q*K^T and scores*V): each sequence has its own Q, K, V and score matrices, so nothing is shared across the batch. Batching raises intensity only for the weight-sharing GEMMs, which are already compute-bound here. Fusion (FlashAttention) is the remedy for attention.

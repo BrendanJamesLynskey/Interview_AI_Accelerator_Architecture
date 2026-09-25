@@ -118,9 +118,9 @@ Test your knowledge of GPU architecture, systolic arrays, TPUs, and dataflow arc
 
 7. **C** -- NVLink 4.0 provides 900 GB/s bidirectional bandwidth per GPU.
 
-8. **D** -- With large outer tiles (M, N >> 256), the fill/drain overhead of the inner K=256 dimension is small, and utilization exceeds 90%. The formula is K/(K + 2*256 - 2) ≈ 256/510 = 50% per tile pass, but with large M, N the array stays in steady state most of the time.
+8. **D** -- With large outer tiles (M, N >> 256), the fill/drain overhead of the inner K=256 dimension is small, and utilization exceeds 90%. Per weight tile, utilization is M/(M + 256 + 256 - 2) for M streamed rows: 256/766 = 33% for M = 256, but 8192/8702 = 94% for M = 8192, because the array stays in steady state most of the time.
 
-9. **B** -- The WSE occupies an entire 300mm silicon wafer (~46,000 mm^2), containing 850,000 cores with 40 GB of distributed on-chip SRAM.
+9. **B** -- The WSE occupies an entire 300mm silicon wafer; the WSE-2 (~46,000 mm^2), containing 850,000 cores with 40 GB of distributed on-chip SRAM.
 
 10. **C** -- The Groq LPU uses a compiler-scheduled (TISA) architecture where every operation is deterministically scheduled at compile time, eliminating cache misses and dynamic scheduling overhead.
 

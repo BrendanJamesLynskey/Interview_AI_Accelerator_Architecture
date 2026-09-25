@@ -79,25 +79,27 @@ Required bandwidth for non-overlapped portion = 9.86 / 0.0736 = 134 GB/s
 
 ### Step 6: Compare with NVLink and PCIe
 
-**NVLink 4.0 (900 GB/s bidirectional)**:
+The 49.3 GB is what each chip *sends* (it receives the same amount at the same time), so the relevant figure is the per-direction bandwidth: half of each bidirectional number.
+
+**NVLink 4.0 (900 GB/s bidirectional = 450 GB/s per direction)**:
 ```
-Communication time (no overlap) = 49.3 GB / 900 GB/s = 54.8 ms
-Overhead = 54.8 / 736 = 7.4% (meets the 10% target even without overlap)
+Communication time (no overlap) = 49.3 GB / 450 GB/s = 109.6 ms
+Overhead = 109.6 / 736 = 14.9% (misses the 10% target without overlap; 80% overlap: 21.9 ms / 736 = 3.0%)
 ```
 
-**PCIe Gen5 x16 (128 GB/s bidirectional)**:
+**PCIe Gen5 x16 (128 GB/s bidirectional = 64 GB/s per direction)**:
 ```
-Communication time (no overlap) = 49.3 GB / 128 GB/s = 385 ms
-Overhead = 385 / 736 = 52.3% (far exceeds 10%, even with 80% overlap: 77 ms / 736 = 10.5%)
+Communication time (no overlap) = 49.3 GB / 64 GB/s = 770 ms
+Overhead = 770 / 736 = 105% (far exceeds 10%, even with 80% overlap: 154 ms / 736 = 20.9%)
 ```
 
 ### Step 7: Summary
 
 | Interconnect | Comm time | Overhead (no overlap) | Overhead (80% overlap) |
 |---|---|---|---|
-| NVLink 900 GB/s | 54.8 ms | 7.4% | 1.5% |
-| PCIe 128 GB/s | 385 ms | 52.3% | 10.5% |
+| NVLink 900 GB/s | 109.6 ms | 14.9% | 3.0% |
+| PCIe 128 GB/s | 770 ms | 105% | 20.9% |
 
-**Conclusion**: NVLink comfortably meets the requirement. PCIe marginally meets it only with aggressive overlap (80%), and in practice the overhead would be higher due to non-overlappable communication at layer boundaries and the need for synchronization.
+**Conclusion**: NVLink meets the requirement once communication is overlapped with compute (the 670 GB/s no-overlap requirement exceeds its 450 GB/s per direction, but the 134 GB/s needed with 80% overlap is well within it). PCIe misses it even with aggressive overlap (80%), and in practice the overhead would be higher still due to non-overlappable communication at layer boundaries and the need for synchronization.
 
 This explains why tensor parallelism is exclusively used within NVLink domains: the per-layer communication overhead is too high for lower-bandwidth interconnects.

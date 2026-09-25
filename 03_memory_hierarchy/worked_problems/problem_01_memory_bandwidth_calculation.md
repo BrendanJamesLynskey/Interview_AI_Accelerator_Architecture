@@ -45,9 +45,9 @@ FFN params = 4096 * 11008 + 4096 * 11008 + 11008 * 4096 = 3 * 45.09M = 135.27M
 
 **All layers**: 32 * 177.22M = 5,671M parameters
 
-**Embeddings + output head**: Vocabulary ~32000 * 4096 = 131M parameters (shared)
+**Embeddings + output head**: Vocabulary ~32000 * 4096 = 131M parameters each; LLaMA-style models do not tie them, so 262M
 
-**Total**: approximately 5,802M = 5.8B parameters (close to 7B including biases and other small tensors; the exact count depends on the architecture -- we will use 7B as stated).
+**Total**: approximately 5,933M = 5.9B parameters. This does not match the 7B label: the GQA configuration above has fewer attention parameters than LLaMA-2 7B, which uses full multi-head attention (32 KV heads) and has 6.74B parameters. We will use 7B as stated, which makes the bandwidth estimates below slightly conservative.
 
 **Weight bytes (FP16)**: 7 * 10^9 * 2 = 14 GB
 
@@ -119,8 +119,10 @@ Total bandwidth = 350 + 13.4 + ~5 = ~368 GB/s
 
 Maximum token rate with INT8:
 ```
-Max tokens/s = 2000 / 7.27 = ~275 tokens/second
+Max tokens/s = 2000 / 7.37 = ~271 tokens/second
 ```
+
+(Where 7.37 GB = 7 GB weights + 0.268 GB KV cache + ~0.1 GB activations per token.)
 
 INT8 quantization nearly doubles the achievable token rate by halving the dominant bandwidth cost (weight loading). This is why quantization is so impactful for inference.
 
@@ -131,7 +133,7 @@ INT8 quantization nearly doubles the achievable token rate by halving the domina
 | Weight data per token | 14 GB | 7 GB |
 | KV cache per token (S=2048) | 268 MB | 268 MB |
 | Bandwidth at 50 tok/s | 723 GB/s | 368 GB/s |
-| Max tok/s on 2 TB/s chip | 138 | 275 |
+| Max tok/s on 2 TB/s chip | 138 | 271 |
 | Bandwidth utilization at 50 tok/s | 36% | 18% |
 
 The analysis confirms that batch-1 LLM inference is dominated by weight loading and is fundamentally memory-bandwidth-bound. Increasing batch size (to amortize weight loads) and weight quantization are the two most effective optimizations.

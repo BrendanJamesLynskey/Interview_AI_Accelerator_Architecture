@@ -55,7 +55,7 @@ Total array area ≈ 10.16 * 2.5 = 25.4 mm^2
 Energy per INT8 MAC operation at 7nm: approximately 0.1 pJ for the multiply, 0.05 pJ for the accumulate, 0.15 pJ for register read/write = 0.3 pJ total.
 
 ```
-MAC dynamic power = 65,536 MACs * 0.3 pJ * 1 GHz = 19.66 mW per GHz = 19.66 W
+MAC dynamic power = 65,536 MACs * 0.3 pJ * 1 GHz = 19.66 W
 ```
 
 Including clock distribution, control logic, and interconnect (typically 3-5x MAC power):

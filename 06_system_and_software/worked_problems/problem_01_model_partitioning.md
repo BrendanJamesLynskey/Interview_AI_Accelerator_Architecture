@@ -19,25 +19,16 @@ Determine: (1) minimum number of GPUs, (2) optimal parallelism strategy, (3) est
 
 **KV cache per request at S=4096**:
 ```
-KV cache = 2 * 126 * 8 * 128 * 4096 * 2 = 2 * 126 * 8 * 128 * 4096 * 2 = 33.6 GB
-```
-
-For 64 concurrent requests: 64 * 33.6 = 2,150 GB = 2.1 TB
-
-**Total memory**: 810 + 2150 = 2960 GB
-
-### Step 2: Minimum GPU count
-
-For memory: 2960 GB / 80 GB = 37 GPUs minimum. Round up to 40 (5 nodes of 8) or 48 (6 nodes of 8).
-
-Actually, let us recalculate the KV cache more carefully:
-```
 Per layer: 2 * H_kv * D_h * S * 2 = 2 * 8 * 128 * 4096 * 2 = 16.78 MB per layer per request
 126 layers: 126 * 16.78 = 2.11 GB per request
 64 requests: 64 * 2.11 = 135 GB
 ```
 
-Revised total: 810 + 135 = 945 GB. Need 945/80 = 12 GPUs minimum. Use 16 GPUs (2 nodes).
+**Total memory**: 810 + 135 = 945 GB
+
+### Step 2: Minimum GPU count
+
+For memory: 945 / 80 = 11.8, so 12 GPUs minimum. Use 16 GPUs (2 nodes), which leaves room for activations and fits power-of-two parallelism.
 
 ### Step 3: Parallelism strategy
 
@@ -59,49 +50,45 @@ Choose **Option A: TP=8, PP=2**.
 
 ### Step 4: Per-token latency estimate
 
-**Compute per token (decode phase)**: Each layer involves GEMMs totaling approximately 2 * model_params_per_layer * 2 FLOPS per token.
-```
-Params per layer ≈ 405B / 126 = 3.21B
-FLOPS per layer ≈ 2 * 3.21B * 2 = 12.9 TFLOPS (rough)
-```
+Assume H100 SXM, with 3.35 TB/s of HBM bandwidth per GPU.
 
-Wait, let us be precise. Per layer:
-- QKV: 2 * (D*D + D*D_kv + D*D_kv) = 2 * (16384^2 + 16384*1024 + 16384*1024) = 2 * (268M + 16.8M + 16.8M) = 604M FLOPS
-  - Actually with B=64: 2 * 64 * (16384*16384 + 16384*1024 + 16384*1024) = 2*64*302M = 38.7G FLOPS
+**Compute per step (decode, batch 64)**. Parameters per layer:
+- QKV: 16384 * (16384 + 2 * 1024) = 302M
+- Output projection: 16384^2 = 268M
+- FFN (SwiGLU: gate, up and down): 3 * 16384 * 53248 = 2,617M
+- Total: 3,187M per layer (126 layers = 401.6B; the embedding and LM head make up the rest of 405B)
 
-For batch 64 decode, this is a (64, 16384) * (16384, 16384) GEMM -- not a matrix-vector anymore. This has reasonable arithmetic intensity.
-
-Let us estimate total FLOPS per step (all 126 layers, batch 64):
 ```
-Per layer FLOPS ≈ 2 * 64 * (3 * 16384 * D_kv_total + 16384^2 + 2 * 16384 * 53248)
-= 2 * 64 * (3 * 16384 * 1024 + 268M + 2 * 16384 * 53248)
-= 2 * 64 * (50.3M + 268M + 1744M)
-= 2 * 64 * 2062M = 264G FLOPS per layer
-Total: 126 * 264G = 33.3 TFLOPS
+FLOPS per layer = 2 * 64 * 3,187M = 408 GFLOPS
+Total per step = 126 * 408G = 51.4 TFLOPS
 ```
 
-With 16 H100s at 50% utilization: 16 * 990 * 0.5 = 7920 TFLOPS sustained.
-Compute time: 33.3T / 7920T = 4.2 ms
+For batch 64 this is a (64, 16384) * (16384, ...) GEMM, not a matrix-vector product, but its arithmetic intensity is still only about 64 FLOPs per BF16 weight byte — far below the H100's ridge point (~295 FLOPs/byte). Decode is therefore **memory-bound**.
 
-**Communication time (TP all-reduce per layer, within node)**:
-Activation size per layer: 64 * 16384 * 2 = 2 MB
-Ring all-reduce within 8 GPUs: 2 * (7/8) * 2 MB / 900 GB/s = 0.0039 ms per layer
-Total TP communication: 126 * 0.0039 = 0.49 ms (negligible)
+Per pipeline stage (8 GPUs, 63 layers):
+- Compute: 25.7 TFLOPS / (8 * 990 * 0.5 TFLOPS) = 6.5 ms
+- Memory: each GPU streams its 50.6 GB of weights plus 8.46 GB of KV cache = 59.1 GB at 3.35 TB/s = 17.6 ms
+
+**TP communication (within node)**: 2 all-reduces per layer (after attention and after the FFN), each of 64 * 16384 * 2 = 2.1 MB:
+```
+Per all-reduce: 2 * (7/8) * 2.1 MB / 450 GB/s (NVLink per direction) = 8.2 us
+Per stage: 63 layers * 2 * 8.2 us = 1.0 ms
+```
+(Messages this small are in practice dominated by latency rather than bandwidth.)
 
 **PP communication (between nodes)**:
-Activation transfer per micro-batch: 64 * 16384 * 2 = 2 MB
-Over InfiniBand (50 GB/s): 2 MB / 50 GB/s = 0.04 ms
-With PP bubble overhead (approximately 1/PP_stages = 50% for PP=2): adds ~4.2 ms of bubble.
+Activation transfer per step: 64 * 16384 * 2 = 2.1 MB over InfiniBand (50 GB/s): 0.04 ms
 
 ### Step 5: Total estimated latency per token
 
 ```
-Compute: ~4.2 ms
-TP communication: ~0.5 ms
-PP overhead: ~4.2 ms (pipeline bubble)
-KV cache loading: ~0.5 ms (135 GB / 16 GPUs / decode_portion)
-Total: ~9.4 ms per token ≈ ~106 tokens/second for 64 concurrent requests
-Per-request throughput: 106/64 ≈ 1.7 tokens/second per request
+Per stage: max(compute 6.5 ms, memory 17.6 ms) + TP 1.0 ms = 18.6 ms
+Two stages in sequence + PP transfer: 2 * 18.6 + 0.04 = ~37 ms per decode step
+Each step produces one token for each of the 64 requests:
+  Per-request rate: 1000 / 37 = ~27 tokens/second
+  Aggregate: 64 * 27 = ~1,700 tokens/second
 ```
 
-This is on the low end for interactive serving. Optimizations: INT8 quantization (halves weights, doubles effective bandwidth), speculative decoding, or larger batch size to improve compute utilization.
+With PP=2 and a single batch, each stage idles while the other works. Splitting the batch into two micro-batches of 32 keeps both stages busy and roughly doubles aggregate throughput, while per-request latency stays near 37 ms per token.
+
+Optimizations: FP8/INT8 weights (halves the weight streaming that dominates each step), speculative decoding, or a larger batch (the same weight stream then serves more requests).

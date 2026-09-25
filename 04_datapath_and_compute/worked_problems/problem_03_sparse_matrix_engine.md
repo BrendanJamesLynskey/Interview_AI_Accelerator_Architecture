@@ -40,10 +40,10 @@ Each cycle, each MAC unit processes one pair of nonzero values: 1 MAC/cycle * 16
 
 For each row of A (16 rows), the K=32 elements are divided into 32/4 = 8 groups of 4. Each group has a 4-bit metadata encoding which 2 of 4 positions are nonzero.
 
-Per cycle, we process 2 groups (8 K-elements, of which 4 are nonzero) per row.
+Over the 16 cycles each row consumes its 8 groups (16 nonzeros), and each MAC performs 1 MAC per cycle, so per cycle each row consumes one nonzero — half a group — together with its 2-bit position index.
 
-Metadata per row per cycle: 2 groups * 4 bits = 8 bits = 1 byte
-Total metadata decode: 16 rows * 8 bits = 128 bits per cycle
+Metadata per row per cycle: 2 bits (one group's 4 bits every 2 cycles)
+Total metadata decode: 16 rows * 2 bits = 32 bits per cycle
 
 The decoder converts each 4-bit metadata into two 2-bit select signals:
 ```
@@ -52,8 +52,8 @@ Metadata 4 bits -> Select_0 (2 bits: position 0-3) + Select_1 (2 bits: position 
 
 There are C(4,2) = 6 valid patterns. A small lookup table (6 entries) per group suffices.
 
-Total decoders: 16 rows * 2 groups per cycle = 32 decoders.
-Each decoder: ~20 gates. Total: ~640 gates (negligible area).
+Total decoders: one per row (each decodes a new group every 2 cycles) = 16 decoders.
+Each decoder: ~20 gates. Total: ~320 gates (negligible area).
 
 ### Step 4: Multiplexer network
 
@@ -88,19 +88,19 @@ Dense array: 512 * 350 = 179,200 um^2 = 0.179 mm^2
 
 **Sparse design:**
 - 256 FP16 MAC units: 256 * 350 = 89,600 um^2
-- Metadata decode: ~640 gates ≈ negligible
+- Metadata decode: ~320 gates ≈ negligible
 - Multiplexers: ~12,288 gates ≈ 0.006 mm^2
-- Metadata storage: 128 bits/cycle * 16 cycles = 2048 bits = 256 bytes buffer ≈ negligible
-- Total: ~0.090 mm^2
+- Metadata storage: 32 bits/cycle * 16 cycles = 512 bits = 64 bytes buffer ≈ negligible
+- Total: ~0.096 mm^2
 
 **Comparison:**
 
 | Design | MAC units | Total area | Effective throughput |
 |---|---|---|---|
 | Dense | 512 | 0.179 mm^2 | 8192 MACs / 16 cycles |
-| Sparse (2:4) | 256 | 0.090 mm^2 | 4096 MACs / 16 cycles (= 8192 effective) |
+| Sparse (2:4) | 256 | 0.096 mm^2 | 4096 MACs / 16 cycles (= 8192 effective) |
 
-The sparse design achieves the same effective throughput (in terms of equivalent dense operations) at ~50% of the area. The overhead for sparsity support (decoders + muxes) is less than 1% of the total area.
+The sparse design achieves the same effective throughput (in terms of equivalent dense operations) at ~54% of the area. The overhead for sparsity support (decoders + muxes) is about 7% of the MAC area (0.006 of 0.090 mm^2).
 
 ### Step 6: Power comparison
 
@@ -113,4 +113,4 @@ Sparse: 256 MACs * 0.4 pJ * 1 GHz = 102.4 mW + ~2 mW (mux + decode) = 104.4 mW
 
 ### Conclusion
 
-The 2:4 structured sparsity hardware support adds minimal area overhead (~1%) while enabling 2x effective throughput at nearly 2x better energy efficiency compared to a dense design with the same silicon area. This explains why NVIDIA included this feature in the A100 and subsequent architectures -- the hardware cost is negligible but the benefit is substantial for compatible workloads.
+The 2:4 structured sparsity hardware support adds modest area overhead (~7%) while enabling 2x effective throughput at nearly 2x better energy efficiency compared to a dense design with the same silicon area. This explains why NVIDIA included this feature in the A100 and subsequent architectures -- the hardware cost is negligible but the benefit is substantial for compatible workloads.

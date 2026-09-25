@@ -141,7 +141,7 @@ Weight loads: 144 KB (loaded once)
 Input loads: 4 * 112.5 KB = 450 KB (each spatial tile loaded once)
 Output stores: 16 tiles * 98 KB = 1568 KB (simplified: 784 KB actual since output is FP16)
    Actually, output is accumulated in FP32 on-chip then written as FP16: 16 * 32 * 28 * 28 * 2 = 784 KB
-Total HBM traffic: 144 + 450 + 784 = 1378 KB = 1.35 MB
+Total HBM traffic: 144 + 450 + 784 = 1378 KB = 1,411,072 bytes (1.35 MiB)
 ```
 
 ### Step 6: Calculate traffic WITHOUT tiling (naive case)
@@ -154,9 +154,9 @@ Without tiling, every multiply requires loading operands from HBM:
 A more realistic "no tiling" baseline is loading each matrix once per output element computation:
 - Input (392 KB) + Weights (144 KB) loaded per spatial output position = clearly impractical
 
-The fair comparison is simply: with tiling, total traffic = 1.35 MB. Without any reuse optimization (each input loaded per output channel group): traffic = 4 * 392 + 144 + 784 = 2.5 MB.
+The fair comparison is simply: with tiling, total traffic = 1.35 MB. Without any reuse optimization (each input loaded per output channel group): traffic = 4 * 392 + 144 + 784 = 2496 KB = 2,555,904 bytes (2.44 MiB).
 
-**Tiling saves approximately 46% of HBM traffic in this case.**
+**Tiling saves approximately 45% of HBM traffic in this case.**
 
 ### Step 7: Calculate arithmetic intensity
 
@@ -167,14 +167,14 @@ FLOPS = 2 * 128 * 64 * 3 * 3 * 56 * 56 = 2 * 128 * 64 * 9 * 3136 = 462,422,016 =
 
 **Arithmetic intensity (with tiling):**
 ```
-AI = 462.4 * 10^6 / (1.35 * 10^6) = 342.5 FLOPS/byte
+AI = 462.4 * 10^6 / (1.411 * 10^6) = 327.7 FLOPS/byte
 ```
 
 This is above the ridge point of most modern accelerators (150-295 FLOPS/byte), confirming that this tiled convolution is compute-bound -- a good result.
 
-Without tiling optimization (2.5 MB traffic):
+Without tiling optimization (2.56 * 10^6 bytes of traffic):
 ```
-AI = 462.4 / 2.5 = 184.9 FLOPS/byte
+AI = 462.4 / 2.556 = 180.9 FLOPS/byte
 ```
 
 Still likely compute-bound on most hardware, but with less margin. The tiling optimization provides insurance against being memory-bound and reduces HBM energy consumption.

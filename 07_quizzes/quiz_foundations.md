@@ -94,7 +94,7 @@ Test your knowledge of AI accelerator fundamentals, compute metrics, and workloa
 
 1. **B** -- Leakage current from quantum tunneling prevented further voltage scaling, ending the constant power density that Dennard scaling predicted.
 
-2. **B** -- FLOPS = 2 * 4096 * 4096 = 33.6M. Bytes = W (4096*4096*2 = 32MB) + x (4096*2 = 8KB) + y (4096*2 = 8KB) ≈ 32MB. AI = 33.6M / 32M ≈ 1.05 FLOPS/byte.
+2. **B** -- FLOPS = 2 * 4096 * 4096 = 33.6M. Bytes = W (4096*4096*2 = 33.6MB) + x (4096*2 = 8KB) + y (4096*2 = 8KB) ≈ 33.6MB. AI = 33.6M / 33.6M ≈ 1.0 FLOPS/byte.
 
 3. **B** -- The ridge point is where the bandwidth ceiling intersects the compute ceiling, marking the transition between memory-bound and compute-bound regimes.
 

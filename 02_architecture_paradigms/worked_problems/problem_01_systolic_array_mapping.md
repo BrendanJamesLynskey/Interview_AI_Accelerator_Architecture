@@ -114,6 +114,8 @@ Total output tiles = 24
 Total cycles = 24 * 3184 = 76,416 cycles
 ```
 
+Weight loads: 8 per output tile, so 24 * 8 = 192 weight-tile loads (each of the 48 distinct 128 x 128 weight tiles is loaded 4 times, once per M tile).
+
 ### Step 6: Calculate throughput
 
 Total useful operations:
@@ -146,6 +148,6 @@ The 32.2% utilization comes from:
 2. **Weight loading overhead**: Even with double-buffering, the initial weight load adds cycles.
 
 To improve utilization:
-- **Increase K-tile size**: Using K_tile = 1024 (full K dimension) would give cycles = 128 + 128 + 1024 - 2 = 1278, with steady-state efficiency = 1024/1278 = 80.1%. However, this requires 128*1024 = 131,072 weight values in the array, which may exceed local PE storage.
+- **Stream more activations per weight tile**: In a weight-stationary array the K tile is fixed at 128 (the array height), but the streamed M dimension is not. Keeping each weight tile resident while streaming all 512 rows of A gives 512 + 128 + 128 - 2 = 766 cycles per weight tile, a steady-state efficiency of 512/766 = 66.8%, and only 48 weight-tile loads instead of 192 (about 36,900 cycles in total, roughly 21.8 TOPS or 67% utilisation).
 - **Use larger matrices**: Bigger M, N, K dimensions amortize the fill/drain overhead.
 - **Pipeline output tiles**: Begin loading weights for the next output tile while draining the current one.

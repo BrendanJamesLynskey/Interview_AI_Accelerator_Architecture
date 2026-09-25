@@ -40,10 +40,10 @@ MAC + register power = 200T * 0.28 pJ = 56 W
 
 64 MB SRAM at 5nm. Assume aggregate read bandwidth of 8 TB/s (to feed the MAC array):
 
-Energy per SRAM read: ~3 pJ per 16-bit read (at 5nm with moderate wire length)
+Energy per SRAM read: ~3 pJ per byte read (at 5nm with moderate wire length)
 ```
 SRAM dynamic power = 8 * 10^12 bytes/s * 3 * 10^-12 J/byte = 24 W
-SRAM leakage (64 MB at ~0.1 mW/MB at 5nm): 64 * 0.1 = 6.4 W
+SRAM leakage (64 MB at ~0.1 W/MB at 5nm): 64 * 0.1 = 6.4 W
 Total SRAM: ~30 W
 ```
 
@@ -116,7 +116,7 @@ TOPS/W = 400 / 300 = 1.33 TOPS/W (competitive for a data center inference chip)
 ```
 
 Area estimate:
-- MAC array: 200T MACs at ~0.08 mm^2 per TOPS = 16 mm^2
+- MAC array: 400 TOPS at ~0.04 mm^2 per TOPS = 16 mm^2
   More precisely: 200T/1GHz = 200K MAC units * 80 um^2 = 16 mm^2
 - SRAM (64 MB): 64 * 8 / 30 Mbit/mm^2 (5nm) ≈ 17 mm^2
 - HBM PHY + controllers: ~15 mm^2

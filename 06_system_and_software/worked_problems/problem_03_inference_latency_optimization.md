@@ -29,7 +29,7 @@ H100 HBM3 bandwidth: 3.35 TB/s
 Theoretical minimum time: 15.07 GB / 3350 GB/s = 4.5 ms
 
 Measured: 28 ms. The gap (28 vs 4.5 ms) is due to:
-- Kernel launch overhead (~0.5 ms per layer * 32 layers = 16 ms from small kernels)
+- Kernel launch overhead from many small kernels (tens of kernel launches per layer)
 - Memory access inefficiency (not achieving full HBM bandwidth)
 - Softmax, normalization, and other non-GEMM operations
 - Framework overhead

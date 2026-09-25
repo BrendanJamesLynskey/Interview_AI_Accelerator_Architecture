@@ -118,4 +118,4 @@ Platform A (higher compute, lower bandwidth) is 1.43x faster overall despite the
 
 However, if operator fusion were used to eliminate the off-chip memory accesses for Softmax and Layer Norm (fusing them with adjacent GEMMs so data stays on-chip), the memory-bound kernels would effectively disappear, and Platform A's advantage would increase further.
 
-This analysis demonstrates why roofline modeling is essential: Platform B has 2x the bandwidth but only half the compute, making it the worse choice for this GEMM-dominated workload despite its lower ridge point.
+This analysis demonstrates why roofline modeling is essential: Platform B has 1.5x the bandwidth but only half the compute, making it the worse choice for this GEMM-dominated workload despite its lower ridge point.

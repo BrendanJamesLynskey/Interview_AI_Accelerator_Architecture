@@ -58,11 +58,11 @@ Solving for T:
 
 Wait -- all three designs have enough SRAM to hold the entire 4096x4096 matrices! Let us verify:
 ```
-A (INT8): 4096 * 4096 = 16 MB
-B (INT8): 4096 * 4096 = 16 MB
-C (INT32): 4096 * 4096 * 4 = 64 MB
-Total: 96 MB
-With double buffering for A, B: 2 * 32 + 64 = 128 MB
+A (INT8): 4096 * 4096 = 16.8 MB
+B (INT8): 4096 * 4096 = 16.8 MB
+C (INT32): 4096 * 4096 * 4 = 67.1 MB
+Total: 100.7 MB
+With double buffering for A, B: 2 * 33.6 + 67.1 = 134.2 MB
 ```
 
 Yes, even Design A (312.5 MB) can hold all data on-chip. This means HBM is accessed only once to load A and B and once to store C, and the GEMM is entirely compute-bound.
@@ -73,10 +73,10 @@ Let us use a larger problem to make the analysis interesting. Consider M=N=K=163
 
 Data sizes:
 ```
-A (INT8): 16384^2 = 256 MB
-B (INT8): 16384^2 = 256 MB  
-C (INT32): 16384^2 * 4 = 1024 MB
-Total: 1536 MB (too large for any design's SRAM)
+A (INT8): 16384^2 = 268 MB
+B (INT8): 16384^2 = 268 MB  
+C (INT32): 16384^2 * 4 = 1074 MB
+Total: 1611 MB (too large for any design's SRAM)
 ```
 
 Now tiling is necessary. With double-buffered A and B, and C staying on-chip for one output tile:
@@ -90,9 +90,9 @@ SRAM = 2 * 2 * T * 1024 + 4 * T^2 = 4096T + 4T^2
 ```
 
 For each design, find maximum T:
-- **Design A** (312.5 MB = 312.5 * 10^6): 4T^2 + 4096T = 312.5 * 10^6 -> T ≈ 8800. Use T = 8192.
-- **Design B** (625 MB): T ≈ 12400. Use T = 8192.
-- **Design C** (937.5 MB): T ≈ 15200. Use T = 8192.
+- **Design A** (312.5 MB = 312.5 * 10^6): 4T^2 + 4096T = 312.5 * 10^6 -> T ≈ 8340. Use T = 8192.
+- **Design B** (625 MB): T ≈ 12000. Use T = 8192.
+- **Design C** (937.5 MB): T ≈ 14800. Use T = 8192.
 
 All can fit T = 8192 with Tk = 1024. Actually, let us try more granular analysis.
 
@@ -110,20 +110,14 @@ The number of K-tiles = 16384 / 1024 = 16. Total tile computations = 4 * 16 = 64
 
 For each output tile (there are 4), across 16 K-tiles:
 ```
-A tiles loaded: 16 * (8192 * 1024) bytes = 16 * 8 MB = 128 MB per output tile
-B tiles loaded: 16 * (1024 * 8192) bytes = 128 MB per output tile
-C written: 8192 * 8192 * 4 = 256 MB per output tile
+A tiles loaded: 16 * (8192 * 1024) bytes = 16 * 8.39 MB = 134.2 MB per output tile
+B tiles loaded: 16 * (1024 * 8192) bytes = 134.2 MB per output tile
+C written: 8192 * 8192 * 4 = 268.4 MB per output tile
 ```
 
-Total HBM traffic: 4 * (128 + 128 + 256) = 4 * 512 = 2048 MB = 2 GB
+Total HBM traffic: 4 * (134.2 + 134.2 + 268.4) = 4 * 536.9 = 2147 MB = 2.15 GB
 
-Alternatively, with double buffering B is loaded once (if reused across M-tiles in the same N-column):
-```
-B total: 16 * (1024 * 16384) = 256 MB
-A total: 16 * (16384 * 1024) = 256 MB  
-C total: 16384 * 16384 * 4 = 1024 MB
-Total: 1536 MB
-```
+(Loading A and B only once each — 268.4 + 268.4 + 1073.7 = 1611 MB in total — would need a schedule that keeps a whole row-block of A or column-block of B on chip alongside the C tile, which does not fit here. Each A and B block is therefore loaded twice, once per output tile that uses it.)
 
 ### Step 5: Calculate execution time for each design
 
@@ -134,8 +128,8 @@ Total compute: 2 * 16384^3 = 8.80 * 10^12 INT8 ops
 - Design B: 8.80 * 10^12 / (1024 * 10^12) = 8.59 ms
 - Design C: 8.80 * 10^12 / (512 * 10^12) = 17.19 ms
 
-**HBM transfer time** (1536 MB at 2 TB/s):
-- 1536 MB / 2000 GB/s = 0.768 ms
+**HBM transfer time** (2147 MB at 2 TB/s):
+- 2147 MB / 2000 GB/s = 1.07 ms
 
 With double buffering, HBM transfer overlaps with compute. Since compute time >> HBM time for all designs, the workload is compute-bound.
 
@@ -146,7 +140,7 @@ With double buffering, HBM transfer overlaps with compute. Since compute time >>
 | Peak TOPS | 1536 | 1024 | 512 |
 | SRAM | 312.5 MB | 625 MB | 937.5 MB |
 | Compute time | 5.73 ms | 8.59 ms | 17.19 ms |
-| HBM time | 0.77 ms | 0.77 ms | 0.77 ms |
+| HBM time | 1.07 ms | 1.07 ms | 1.07 ms |
 | Bottleneck | Compute | Compute | Compute |
 | Effective TOPS | ~1536 | ~1024 | ~512 |
 
